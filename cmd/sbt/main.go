@@ -5,7 +5,6 @@ package main
 import (
 	"bufio"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -13,10 +12,10 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -25,12 +24,13 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"starbt/internal/export"
 	"starbt/internal/sbtconf"
 	"starbt/internal/ssserver"
 	"starbt/internal/sysinfo"
 )
 
-const version = "v0.2.3"
+const version = "v0.2.4"
 
 func main() {
 	args := os.Args[1:]
@@ -71,6 +71,8 @@ func main() {
 		cmdServe()
 	case "ss":
 		cmdSS(args[1:])
+	case "export":
+		cmdExport(args[1:])
 	case "menu":
 		menu()
 	case "help", "-h", "--help":
@@ -98,6 +100,8 @@ func usage() {
   sbt ss passwd [新密码]   修改密码（不带参数 = 随机生成）
   sbt ss port <端口>       修改端口
   sbt ss log        实时连接日志      sbt ss restart  重启服务端
+  sbt export clash  生成 Clash Verge 配置文件（.yaml）
+  sbt export all    生成通用订阅（Clash / 订阅 / 分享链接 / sing-box）
   sbt version      版本号
 `, version)
 }
@@ -412,8 +416,7 @@ func showSSInfo() {
 		method = "aes-256-gcm"
 	}
 	host := publicIP()
-	link := "ss://" + base64.RawURLEncoding.EncodeToString([]byte(method+":"+cfg.SSPassword)) +
-		"@" + net.JoinHostPort(host, cfg.SSPort) + "#" + url.QueryEscape("StarBT")
+	link := export.Node{Name: "StarBT", Host: host, Port: cfg.SSPort, Password: cfg.SSPassword, Method: method}.ShareLink()
 	bar := strings.Repeat("═", 58)
 	sub := strings.Repeat("─", 58)
 	fmt.Printf("\n%s\n  StarBT Shadowsocks 服务端 · 客户端连接信息\n%s\n", bar, bar)
@@ -568,6 +571,154 @@ func serviceControl(action string) {
 	}
 }
 
+// ---------- 客户端配置导出（菜单 7 / 8） ----------
+
+func currentNode() (export.Node, error) {
+	cfg, err := loadSS()
+	if err != nil {
+		return export.Node{}, err
+	}
+	method := cfg.SSMethod
+	if method == "" {
+		method = "aes-256-gcm"
+	}
+	return export.Node{Name: "StarBT", Host: publicIP(), Port: cfg.SSPort, Password: cfg.SSPassword, Method: method}, nil
+}
+
+func exportDir() string { return filepath.Join(filepath.Dir(confPath()), "exports") }
+
+// writeExport 写到配置目录下的 exports/（含密码，权限 600），返回路径。
+func writeExport(filename, content string) (string, error) {
+	if err := os.MkdirAll(exportDir(), 0o700); err != nil {
+		return "", err
+	}
+	p := filepath.Join(exportDir(), filename)
+	if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
+		return "", err
+	}
+	return p, nil
+}
+
+func showFile(path, title, content string) {
+	sub := strings.Repeat("─", 56)
+	fmt.Printf("\n  %s\n  文件: %s\n  %s\n", title, path, sub)
+	for _, l := range strings.Split(strings.TrimRight(content, "\n"), "\n") {
+		fmt.Println("  | " + l)
+	}
+	fmt.Println("  " + sub)
+}
+
+var exportItems = []struct{ file, title, clients, how string }{
+	{"starbt-clash.yaml", "Clash 系配置（YAML）", "Clash Verge / Rev、Clash Meta(mihomo)、Clash for Windows、ClashX、FlClash、Stash", "订阅页导入本地文件"},
+	{"starbt-subscription.txt", "Base64 订阅内容", "Shadowrocket、v2rayN / v2rayNG、Nekoray / NekoBox、Hiddify 等「订阅」类客户端", "复制文件内容 → 从剪贴板导入"},
+	{"starbt-share-link.txt", "单条分享链接（ss://）", "几乎所有 Shadowsocks 客户端（Windows / macOS / Android / iOS）", "复制链接 → 从剪贴板导入，或生成二维码扫码"},
+	{"starbt-singbox.json", "sing-box 节点片段", "sing-box 及以其为内核的客户端", "合并进自己配置的 outbounds"},
+}
+
+func exportContents(n export.Node) map[string]string {
+	return map[string]string{
+		"starbt-clash.yaml":       n.ClashYAML(),
+		"starbt-subscription.txt": n.Subscription(),
+		"starbt-share-link.txt":   n.ShareLink() + "\n",
+		"starbt-singbox.json":     n.SingBoxJSON(),
+		"starbt-client-overview.txt": overviewText(n),
+	}
+}
+
+func saveExports(n export.Node) map[string]string {
+	contents := exportContents(n)
+	for file, content := range contents {
+		if _, err := writeExport(file, content); err != nil {
+			fmt.Println("  ✗ 写入失败", file, err)
+		}
+	}
+	return contents
+}
+
+func exportClash() {
+	n, err := currentNode()
+	if err != nil {
+		fmt.Println("  ✗", err)
+		return
+	}
+	contents := saveExports(n)
+	p := filepath.Join(exportDir(), "starbt-clash.yaml")
+	showFile(p, "Clash 系配置（YAML）", contents["starbt-clash.yaml"])
+	fmt.Println("  导入 Clash Verge：订阅(Profiles) 页 → 把保存到本机的 starbt-clash.yaml 拖进窗口，或点「导入」选本地文件")
+	fmt.Println("  其它 Clash 系客户端（Clash Meta / for Windows / ClashX / FlClash / Stash）导入同一个文件")
+	fmt.Println("  取回本机（在本机终端执行）：")
+	fmt.Printf("    scp root@%s:%s .\n", n.Host, p)
+}
+
+func exportAll() {
+	n, err := currentNode()
+	if err != nil {
+		fmt.Println("  ✗", err)
+		return
+	}
+	contents := saveExports(n)
+	sub := strings.Repeat("─", 56)
+	fmt.Printf("\n  通用订阅 —— 一次生成各类客户端要用的文件\n  %s\n", sub)
+	for _, it := range exportItems {
+		fmt.Printf("  %s\n    %-22s 适用: %s\n    %-22s 用法: %s\n", filepath.Join(exportDir(), it.file), it.title, it.clients, "", it.how)
+	}
+	fmt.Println("  " + sub)
+	for _, it := range exportItems {
+		showFile(filepath.Join(exportDir(), it.file), it.title, contents[it.file])
+	}
+	fmt.Printf("  取回本机（在本机终端执行，一次拿回整个目录）：\n    scp -r root@%s:%s .\n", n.Host, exportDir())
+}
+
+// overviewText 是一份「客户端 → 用哪个文件」速查表，随其它文件一并落盘。
+func overviewText(n export.Node) string {
+	return fmt.Sprintf(`StarBT 客户端配置速查（节点 %s）
+==========================================
+
+服务器地址   %s
+端口         %s
+密码         %s
+加密方式     %s
+
+一、Clash 系（Clash Verge / Rev、Clash Meta(mihomo)、Clash for Windows、ClashX、FlClash、Stash）
+    → starbt-clash.yaml，在订阅页导入本地文件。
+
+二、订阅类（Shadowrocket、v2rayN / v2rayNG、Nekoray / NekoBox、Hiddify 等）
+    → starbt-subscription.txt 的内容（Base64 订阅），在客户端里「从剪贴板导入」。
+      这类客户端平时填的是订阅网址；这里生成的是文件，所以走剪贴板。
+
+三、所有 Shadowsocks 客户端（Windows / macOS / Android / iOS）
+    → starbt-share-link.txt 里的 ss:// 链接：从剪贴板导入，或生成二维码扫码。
+      也可以手动填最上面的四项。
+
+四、sing-box 系（sing-box 及以其为内核的客户端）
+    → 把 starbt-singbox.json 里的 outbound 合并进自己配置的 outbounds。
+
+说明：服务端目前只转发 TCP，所以 Clash 配置里 udp 为 false。
+      浏览网页、看视频不受影响；依赖 UDP 的 QUIC 会回落到 TCP。
+`, n.Name, n.Host, n.Port, n.Password, n.Method)
+}
+
+func cmdExport(sub []string) {
+	mode := "all"
+	if len(sub) > 0 {
+		mode = sub[0]
+	}
+	switch mode {
+	case "clash":
+		exportClash()
+	case "all":
+		exportAll()
+	case "link":
+		if n, err := currentNode(); err == nil {
+			fmt.Println(n.ShareLink())
+		} else {
+			fmt.Println("  ✗", err)
+		}
+	default:
+		fmt.Println("用法: sbt export [clash | all | link]")
+	}
+}
+
 func cmdSS(sub []string) {
 	if len(sub) == 0 {
 		showSSInfo()
@@ -644,9 +795,11 @@ func menu() {
 		fmt.Println("  4. 服务管理     启动 / 停止 / 重启 / 状态")
 		fmt.Println("  5. 连接日志     最近的代理连接记录")
 		fmt.Println("  6. 服务器状态   CPU / 内存 / 磁盘 / 网络（附属）")
+		fmt.Println("  7. Clash 配置   生成 .yaml，直接导入 Clash Verge")
+		fmt.Println("  8. 通用订阅     各类客户端的配置 / 订阅 / 分享链接")
 		fmt.Println("  0. 退出")
 		fmt.Println(bar)
-		switch ask("  请选择 [0-6]: ") {
+		switch ask("  请选择 [0-8]: ") {
 		case "1":
 			showSSInfo()
 			pause()
@@ -665,6 +818,12 @@ func menu() {
 			pause()
 		case "6":
 			cmdStatus()
+			pause()
+		case "7":
+			exportClash()
+			pause()
+		case "8":
+			exportAll()
 			pause()
 		case "0", "q", "Q":
 			return

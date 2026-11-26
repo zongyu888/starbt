@@ -57,8 +57,27 @@ SSH 登录服务器后直接敲 `sbt` 回车，进入管理菜单：
   4. 服务管理     启动 / 停止 / 重启 / 状态
   5. 连接日志     最近的代理连接记录
   6. 服务器状态   CPU / 内存 / 磁盘 / 网络（附属）
+  7. Clash 配置   生成 .yaml，直接导入 Clash Verge
+  8. 通用订阅     各类客户端的配置 / 订阅 / 分享链接
   0. 退出
 ```
+
+**第 7、8 项是给本地客户端用的**：在服务器上生成好配置文件，再把文件取回本机导入。
+
+| 客户端 | 用哪个文件 | 怎么导入 |
+|---|---|---|
+| Clash Verge / Rev、Clash Meta(mihomo)、Clash for Windows、ClashX、FlClash、Stash | `starbt-clash.yaml` | 订阅页导入本地文件（或拖进去） |
+| Shadowrocket、v2rayN / v2rayNG、Nekoray / NekoBox、Hiddify 等订阅类 | `starbt-subscription.txt` | 复制内容 → 从剪贴板导入 |
+| 所有 Shadowsocks 客户端（Windows / macOS / Android / iOS） | `starbt-share-link.txt` | 复制 `ss://` 链接 → 从剪贴板导入 / 扫码 |
+| sing-box 及以其为内核的客户端 | `starbt-singbox.json` | 合并进自己配置的 `outbounds` |
+
+生成的文件在服务器的 `/etc/sbt/exports/`（权限 600，含密码）。取回本机：
+
+```sh
+scp -r root@<服务器IP>:/etc/sbt/exports .
+```
+
+生成的 Clash 配置已用 mihomo 内核（Clash Verge 用的就是它）实测：配置校验通过，流量经 `PROXY → StarBT` 出网。
 
 也支持子命令，方便写脚本：
 
@@ -69,6 +88,9 @@ SSH 登录服务器后直接敲 `sbt` 回车，进入管理菜单：
 | `sbt ss port <端口>` | 修改端口，自动检测占用，自动重启并校验 |
 | `sbt ss log` | 实时连接日志（Ctrl+C 结束） |
 | `sbt ss restart` / `start` / `stop` / `status` | 服务管理 |
+| `sbt export clash` | 只生成 Clash 配置 `starbt-clash.yaml` |
+| `sbt export all` | 生成全部客户端格式（Clash / 订阅 / 分享链接 / sing-box） |
+| `sbt export link` | 只打印 `ss://` 分享链接 |
 | `sbt status` | 服务器状态 |
 
 ## 卸载
@@ -117,7 +139,7 @@ Alpine 3.20 · Arch Linux · openSUSE Leap 15
 5. 按上表注册常驻；`ufw` / `firewalld` 处于启用状态时自动放行端口
 6. 自检并打印客户端连接信息
 
-文件位置：`/usr/local/bin/sbt`、`/etc/sbt/config.toml`、`/var/lib/sbt/`、`/var/log/sbt.log`。
+文件位置：`/usr/local/bin/sbt`、`/etc/sbt/config.toml`、`/etc/sbt/exports/`（客户端配置）、`/var/lib/sbt/`、`/var/log/sbt.log`。
 
 ## 技术说明
 

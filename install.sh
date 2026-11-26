@@ -32,7 +32,7 @@ set -eu
 
 NAME=StarBT
 CMD=sbt
-DEFAULT_VERSION=v0.2.3
+DEFAULT_VERSION=v0.2.4
 BIN=/usr/local/bin/$CMD
 CONF_DIR=/etc/sbt
 CONF=$CONF_DIR/config.toml
@@ -78,9 +78,8 @@ uninstall() {
     if have crontab; then
         (crontab -l 2>/dev/null || true) | grep -v "$BIN daemon" | crontab - 2>/dev/null || true
     fi
-    rm -f "$INIT" "$UNIT" "$BIN" "$CONF" "$CRON" /var/run/$CMD.pid
-    rmdir "$CONF_DIR" 2>/dev/null || true
-    rm -rf "$DATA_DIR"
+    rm -f "$INIT" "$UNIT" "$BIN" "$CRON" /var/run/$CMD.pid
+    rm -rf "$CONF_DIR" "$DATA_DIR"
     log "已卸载 StarBT（程序、常驻项、配置与密码均已删除）"
 }
 
@@ -384,6 +383,9 @@ BIN_SRC=$(find "$WORK" -type f -name "$CMD" | head -1)
 [ -n "$BIN_SRC" ] || die "安装包里找不到 $CMD 可执行文件"
 if have install; then install -m 755 "$BIN_SRC" "$BIN"; else cp "$BIN_SRC" "$BIN"; chmod 755 "$BIN"; fi
 log "已安装 $BIN ($("$BIN" version))"
+# 以实际安装的二进制版本为准（离线安装时可能与仓库里的最新版本号不同）
+VERSION=$("$BIN" version 2>/dev/null | awk 'NR==1{print $2}' || true)
+[ -n "$VERSION" ] || VERSION=$DEFAULT_VERSION
 
 # ---------- 配置（幂等：已有配置与密码保持不变） ----------
 mkdir -p "$CONF_DIR" "$DATA_DIR"
