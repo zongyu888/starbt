@@ -9,7 +9,12 @@
 #      curl -fsSL https://cdn.jsdelivr.net/gh/zongyu888/starbt@latest/install.sh | sh
 #    GitHub：
 #      curl -fsSL https://raw.githubusercontent.com/zongyu888/starbt/main/install.sh | sh
+#    国内（GitHub 加速站，内容与官方一致；安装包同样会自动测速选最快的源）：
+#      curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/zongyu888/starbt/main/install.sh | sh
+#      curl -fsSL https://gh-proxy.com/https://raw.githubusercontent.com/zongyu888/starbt/main/install.sh | sh
 #    非 root 用户在上面命令末尾把 sh 换成 sudo sh
+#    第三方加速站理论上可篡改内容：能直连时优先用 GitHub / jsDelivr 入口；
+#    无论从哪个入口来，安装包都要过 sha256 校验（经加速站下载时校验值优先取自 GitHub 官方）。
 #
 #  说明：Gitee 仓库的 raw 链接当前处于平台内容审核状态（HTTP 451），
 #        暂不能用作安装入口；Gitee 的 Release 附件可正常下载，仍作为国内下载镜像。
@@ -17,7 +22,7 @@
 #  可选环境变量：
 #    SBT_VERSION=v0.2.3        指定版本（默认自动读取最新）
 #    SBT_PORT=8389             首次安装时的监听端口
-#    SBT_MIRROR=gitee|github   指定镜像并跳过测速
+#    SBT_MIRROR=<名称>        指定下载源并跳过测速（可用名称见脚本输出，如 jsdelivr / github / ghfast）
 #    SBT_MIRROR_URL=https://…  自定义下载源（其下有 <版本>/sbt_linux_<架构>.tar.gz）
 #
 #  其它用法：
@@ -32,7 +37,7 @@ set -eu
 
 NAME=StarBT
 CMD=sbt
-DEFAULT_VERSION=v0.2.7
+DEFAULT_VERSION=v0.2.8
 BIN=/usr/local/bin/$CMD
 CONF_DIR=/etc/sbt
 CONF=$CONF_DIR/config.toml
@@ -167,46 +172,62 @@ probe() {
         -w '%{http_code} %{speed_download}' "$1" </dev/null 2>/dev/null || printf '000 0'
 }
 
+# 下载源表：名称|基础路径（已含版本号）。测速与 SBT_MIRROR=<名称> 共用这一张表。
+#   gitee          Gitee Release（仓库因平台规则不能公开，匿名一般 403，会自动跳过）
+#   jsdelivr       jsDelivr CDN 分发仓库内 release-assets/（国内可达）
+#   github         GitHub Release（官方源）
+#   ghfast / gh-proxy / ghproxy-net   GitHub 加速站：把官方地址接在自己后面，供国内网络使用
+# 经加速站下载时，sha256 校验值优先取自 GitHub 官方源（见下方的下载与校验）。
+mirror_table() {
+    cat <<EOF
+gitee|$GITEE_REPO/releases/download/$VERSION
+jsdelivr|https://cdn.jsdelivr.net/gh/zongyu888/starbt@$VERSION/release-assets
+github|$GITHUB_REPO/releases/download/$VERSION
+ghfast|https://ghfast.top/$GITHUB_REPO/releases/download/$VERSION
+gh-proxy|https://gh-proxy.com/$GITHUB_REPO/releases/download/$VERSION
+ghproxy-net|https://ghproxy.net/$GITHUB_REPO/releases/download/$VERSION
+EOF
+}
+
 choose_mirror() {
     ASSET=sbt_linux_${ARCH}.tar.gz
-    case "${SBT_MIRROR:-}" in
-        gitee)    MIRROR=gitee;    REL="$GITEE_REPO/releases/download/$VERSION"; RAW=$GITEE_RAW;  log "已指定下载源: Gitee";    return 0 ;;
-        jsdelivr) MIRROR=jsdelivr; REL="https://cdn.jsdelivr.net/gh/zongyu888/starbt@$VERSION/release-assets"; RAW=$JSDELIVR_RAW; log "已指定下载源: jsDelivr"; return 0 ;;
-        github)   MIRROR=github;   REL="$GITHUB_REPO/releases/download/$VERSION"; RAW=$GITHUB_RAW; log "已指定下载源: GitHub";   return 0 ;;
-    esac
+    mirror_table > "$WORK/mirrors"
+    if [ -n "${SBT_MIRROR:-}" ]; then
+        while IFS='|' read -r name rel; do
+            if [ "$name" = "$SBT_MIRROR" ]; then
+                MIRROR=$name; REL=$rel
+                log "已指定下载源: $name"
+                return 0
+            fi
+        done < "$WORK/mirrors"
+        die "SBT_MIRROR=$SBT_MIRROR 不是可用的下载源。可选: $(cut -d'|' -f1 "$WORK/mirrors" | tr '\n' ' ')"
+    fi
     if [ -n "${SBT_MIRROR_URL:-}" ]; then
         case "$SBT_MIRROR_URL" in */) ;; *) SBT_MIRROR_URL="$SBT_MIRROR_URL/" ;; esac
         MIRROR=custom; REL="${SBT_MIRROR_URL}$VERSION"
         log "使用自定义下载源: $REL"
         return 0
     fi
-    MIRROR=github; REL="$GITHUB_REPO/releases/download/$VERSION"; RAW=$GITHUB_RAW
+    MIRROR=github; REL="$GITHUB_REPO/releases/download/$VERSION"
     have curl || { log "未安装 curl，无法测速，使用默认源 GitHub"; return 0; }
     BEST=0
-    log "正在测速，自动选择下载最快的镜像…"
-    # 三个下载源，逐一测速取最快。不可达的（HTTP 非 200/206）自动跳过。
-    #   gitee    Gitee Release（该仓库因平台规则不能公开，匿名一般 403，会自动跳过）
-    #   jsdelivr jsDelivr CDN 分发仓库内 release-assets/（国内可达，按版本号固定）
-    #   github   GitHub Release（官方源，海外快）
-    while IFS='|' read -r name rel raw; do
+    log "正在测速，自动选择下载最快的源（国内网络会自动用上 GitHub 加速站）…"
+    while IFS='|' read -r name rel; do
         [ -n "$name" ] || continue
+        pad=$(printf '%s' "$name" | awk '{printf "%-13s", $0}')
         out=$(probe "$rel/$ASSET")
         code=${out%% *}
         speed=${out#* }
         if [ "$code" = 200 ] || [ "$code" = 206 ]; then
             kb=$(awk -v s="$speed" 'BEGIN{printf "%.0f", s/1024}')
-            log "  $name   ✓  ${kb} KB/s"
+            log "  $pad ✓  ${kb} KB/s"
             if awk -v a="$speed" -v b="$BEST" 'BEGIN{exit !(a>b)}'; then
-                BEST=$speed; MIRROR=$name; REL=$rel; RAW=$raw
+                BEST=$speed; MIRROR=$name; REL=$rel
             fi
         else
-            warn "  $name   ✗  不可达 (HTTP $code)"
+            warn "  $pad ✗  不可达 (HTTP $code)"
         fi
-    done <<EOF
-gitee|$GITEE_REPO/releases/download/$VERSION|$GITEE_RAW
-jsdelivr|https://cdn.jsdelivr.net/gh/zongyu888/starbt@$VERSION/release-assets|$JSDELIVR_RAW
-github|$GITHUB_REPO/releases/download/$VERSION|$GITHUB_RAW
-EOF
+    done < "$WORK/mirrors"
     [ "$BEST" != 0 ] || die "所有下载源都连不上。请检查服务器网络，或用 SBT_MIRROR_URL=https://… 指定下载源"
     log "选用下载源: $MIRROR"
 }
@@ -385,10 +406,26 @@ else
     choose_mirror
     log "下载 $REL/$ASSET"
     fetch "$REL/$ASSET" "$WORK/$ASSET" || die "下载失败。可换源重试：SBT_MIRROR=jsdelivr 或 SBT_MIRROR=github"
-    fetch "$REL/$ASSET.sha256" "$WORK/$ASSET.sha256" || die "下载 sha256 校验文件失败"
-    [ "$(awk '{print $1}' "$WORK/$ASSET.sha256")" = "$(sha256_of "$WORK/$ASSET")" ] \
+    # 校验值的来源：加速站属于第三方，优先拿 GitHub 官方的 sha256 来核对下载到的包，
+    # 这样即使加速站内容被篡改也装不进来；GitHub 官方连不上时才退回该源自带的校验值并明确告警。
+    EXPECTED=
+    SHA_FROM=
+    case "$MIRROR" in
+        github|jsdelivr|gitee|custom)
+            fetch "$REL/$ASSET.sha256" "$WORK/$ASSET.sha256" || die "下载 sha256 校验文件失败"
+            EXPECTED=$(awk '{print $1}' "$WORK/$ASSET.sha256"); SHA_FROM=$MIRROR ;;
+        *)
+            if fetch "$GITHUB_REPO/releases/download/$VERSION/$ASSET.sha256" "$WORK/$ASSET.official.sha256"; then
+                EXPECTED=$(awk '{print $1}' "$WORK/$ASSET.official.sha256"); SHA_FROM="GitHub 官方"
+            else
+                fetch "$REL/$ASSET.sha256" "$WORK/$ASSET.sha256" || die "下载 sha256 校验文件失败"
+                EXPECTED=$(awk '{print $1}' "$WORK/$ASSET.sha256"); SHA_FROM="第三方源"
+                warn "GitHub 官方不可达，校验值只能取自 $MIRROR 自身（第三方站理论上存在被篡改的可能）"
+            fi ;;
+    esac
+    [ "$(sha256_of "$WORK/$ASSET")" = "$EXPECTED" ] \
         || die "安装包 sha256 校验失败（文件损坏或被篡改），已中止安装"
-    log "sha256 校验通过"
+    log "sha256 校验通过（校验值来自 $SHA_FROM）"
 fi
 
 tar -xzf "$WORK/$ASSET" -C "$WORK"

@@ -30,7 +30,7 @@ import (
 	"starbt/internal/sysinfo"
 )
 
-const version = "v0.2.7"
+const version = "v0.2.8"
 
 func main() {
 	args := os.Args[1:]
@@ -635,19 +635,40 @@ func saveExports(n export.Node) map[string]string {
 	return contents
 }
 
+func fileExists(p string) bool {
+	_, err := os.Stat(p)
+	return err == nil
+}
+
 func exportClash() {
 	n, err := currentNode()
 	if err != nil {
 		fmt.Println("  ✗", err)
 		return
 	}
-	contents := saveExports(n)
 	p := filepath.Join(exportDir(), "starbt-clash.yaml")
+	replaced := fileExists(p)
+	contents := saveExports(n)
 	showFile(p, "Clash 系配置（YAML）", contents["starbt-clash.yaml"])
-	fmt.Println("  导入 Clash Verge：订阅(Profiles) 页 → 把保存到本机的 starbt-clash.yaml 拖进窗口，或点「导入」选本地文件")
-	fmt.Println("  其它 Clash 系客户端（Clash Meta / for Windows / ClashX / FlClash / Stash）导入同一个文件")
-	fmt.Println("  取回本机（在本机终端执行）：")
-	fmt.Printf("    scp root@%s:%s .\n", n.Host, p)
+	sub := strings.Repeat("─", 56)
+	fmt.Println("  " + sub)
+	if replaced {
+		fmt.Printf("  已用新内容覆盖原文件（%s 生成）。始终只有这一个文件，不会出现第二个版本。\n", time.Now().Format("2006-01-02 15:04"))
+	}
+	fmt.Println("  【文件在哪里】")
+	fmt.Printf("    服务器上：    %s\n", p)
+	fmt.Println("  【取回本机】在本机终端执行，重复执行会覆盖本机的旧文件：")
+	fmt.Println(`    Windows：       scp root@` + n.Host + `:` + p + ` %USERPROFILE%\Downloads\`)
+	fmt.Printf("    macOS / Linux： scp root@%s:%s ~/\n", n.Host, p)
+	fmt.Println("  【放到 Clash Verge 的哪里】")
+	fmt.Println("    第一次：订阅(Profiles) 页 → 把取回的 starbt-clash.yaml 拖进窗口（或点「导入」选它）")
+	fmt.Println("    之后再更新：右键那条 StarBT 配置 → 编辑文件 → 全选粘贴新内容 → 保存；")
+	fmt.Println("                或者删掉旧的再拖入新文件。这样始终只有一条，不会越积越多。")
+	fmt.Println("    不要直接把文件拷进下面的目录，不经界面导入不会被识别。该目录仅作参考：")
+	fmt.Println("      Windows  Clash Verge Rev： %APPDATA%\\io.github.clash-verge-rev.clash-verge-rev\\profiles\\")
+	fmt.Println("               旧版 Clash Verge： %APPDATA%\\clash-verge\\profiles\\")
+	fmt.Println("      macOS： ~/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/profiles/")
+	fmt.Println("  【其它 Clash 系客户端】Clash Meta / Clash for Windows / ClashX / FlClash / Stash 导入同一个文件")
 }
 
 func exportAll() {
@@ -666,6 +687,8 @@ func exportAll() {
 	for _, it := range exportItems {
 		showFile(filepath.Join(exportDir(), it.file), it.title, contents[it.file])
 	}
+	fmt.Println("  " + sub)
+	fmt.Printf("  以上文件都在服务器的 %s（权限 600，含密码）。重复生成会直接覆盖同名文件。\n", exportDir())
 	fmt.Printf("  取回本机（在本机终端执行，一次拿回整个目录）：\n    scp -r root@%s:%s .\n", n.Host, exportDir())
 }
 
