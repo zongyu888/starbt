@@ -12,12 +12,14 @@ Shadowsocks 客户端里填上服务器地址、端口、密码，本机上网�
 需要 root。两条命令任选其一，脚本会**自动测速并从下载最快的镜像**获取安装包：
 
 ```sh
-# jsDelivr CDN（国内直连快，推荐；@latest 自动指向最新发布版）
-curl -fsSL https://cdn.jsdelivr.net/gh/zongyu888/starbt@latest/install.sh | sh
-
-# GitHub
+# GitHub（新版本发布后几分钟内即可装到最新版）
 curl -fsSL https://raw.githubusercontent.com/zongyu888/starbt/main/install.sh | sh
+
+# jsDelivr CDN（国内直连快；新版本发布后引导脚本可能延迟数小时才更新）
+curl -fsSL https://cdn.jsdelivr.net/gh/zongyu888/starbt@latest/install.sh | sh
 ```
+
+两个入口装出来的是同一个东西。下载安装包时会自动在三个源之间测速（jsDelivr CDN / GitHub Release / Gitee Release），选最快的那个。
 
 非 root 用户把末尾的 `sh` 换成 `sudo sh`。安装完成后会直接打印客户端要填的内容：
 
@@ -123,7 +125,7 @@ Alpine 3.20 · Arch Linux · openSUSE Leap 15
 
 | 变量 | 作用 |
 |---|---|
-| `SBT_VERSION=v0.2.5` | 安装指定版本（默认自动读取最新） |
+| `SBT_VERSION=v0.2.7` | 安装指定版本（默认自动读取最新 Release） |
 | `SBT_PORT=8389` | 首次安装时的监听端口 |
 | `SBT_MIRROR=jsdelivr`、`github` 或 `gitee` | 指定下载源并跳过测速（jsDelivr CDN / GitHub Release / Gitee Release） |
 | `SBT_MIRROR_URL=https://…` | 自定义下载源 |
@@ -133,7 +135,7 @@ Alpine 3.20 · Arch Linux · openSUSE Leap 15
 全程无交互，失败即中止，重复执行等于升级（保留配置和密码）：
 
 1. 识别 CPU 架构与系统；缺 `curl`/`tar`/`gzip` 时自动调用对应包管理器安装
-2. 从仓库读取最新版本号；对三个下载源做下载测速，选最快的一个（jsDelivr CDN、GitHub Release、Gitee Release；不可达的自动跳过）
+2. 从 GitHub 最新 Release 读取版本号（失败则依次回退到仓库里的 VERSION 文件）；对三个下载源做下载测速，选最快的一个（jsDelivr CDN、GitHub Release、Gitee Release；不可达的自动跳过）
 3. 下载 → **sha256 校验** → 解压到 `/usr/local/bin/sbt`
 4. 生成 `/etc/sbt/config.toml`（权限 600，随机密码）
 5. 按上表注册常驻；`ufw` / `firewalld` 处于启用状态时自动放行端口

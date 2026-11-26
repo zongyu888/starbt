@@ -32,7 +32,7 @@ set -eu
 
 NAME=StarBT
 CMD=sbt
-DEFAULT_VERSION=v0.2.6
+DEFAULT_VERSION=v0.2.7
 BIN=/usr/local/bin/$CMD
 CONF_DIR=/etc/sbt
 CONF=$CONF_DIR/config.toml
@@ -143,7 +143,15 @@ resolve_version() {
     [ -n "$VERSION" ] && return 0
     VERSION=$DEFAULT_VERSION
     have curl || return 0
-    # 顺序：GitHub → jsDelivr → Gitee（Gitee raw 当前处于审核状态，放最后）
+    # 1) GitHub API 的最新 Release：无 CDN 缓存，刚发布的新版立即可见（匿名限流 60 次/小时，失败则回退）
+    if v=$(curl -fsSL --connect-timeout 4 --max-time 8 -H 'Accept: application/vnd.github+json' \
+            https://api.github.com/repos/zongyu888/starbt/releases/latest </dev/null 2>/dev/null \
+            | grep -o '"tag_name": *"v[0-9][^"]*"' | head -1 | sed 's/.*"\(v[^"]*\)"/\1/'); then
+        case "$v" in
+            v[0-9]*) VERSION=$v; return 0 ;;
+        esac
+    fi
+    # 2) 仓库里的 VERSION 文件（静态 CDN 有缓存，可能滞后）
     for raw in "$GITHUB_RAW" "$JSDELIVR_RAW" "$GITEE_RAW"; do
         if v=$(curl -fsSL --connect-timeout 4 --max-time 6 "$raw/VERSION" </dev/null 2>/dev/null | tr -d '[:space:]'); then
             case "$v" in
