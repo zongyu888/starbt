@@ -32,7 +32,7 @@ set -eu
 
 NAME=StarBT
 CMD=sbt
-DEFAULT_VERSION=v0.2.5
+DEFAULT_VERSION=v0.2.6
 BIN=/usr/local/bin/$CMD
 CONF_DIR=/etc/sbt
 CONF=$CONF_DIR/config.toml
@@ -160,27 +160,29 @@ probe() {
 }
 
 choose_mirror() {
+    ASSET=sbt_linux_${ARCH}.tar.gz
+    case "${SBT_MIRROR:-}" in
+        gitee)    MIRROR=gitee;    REL="$GITEE_REPO/releases/download/$VERSION"; RAW=$GITEE_RAW;  log "已指定下载源: Gitee";    return 0 ;;
+        jsdelivr) MIRROR=jsdelivr; REL="https://cdn.jsdelivr.net/gh/zongyu888/starbt@$VERSION/release-assets"; RAW=$JSDELIVR_RAW; log "已指定下载源: jsDelivr"; return 0 ;;
+        github)   MIRROR=github;   REL="$GITHUB_REPO/releases/download/$VERSION"; RAW=$GITHUB_RAW; log "已指定下载源: GitHub";   return 0 ;;
+    esac
     if [ -n "${SBT_MIRROR_URL:-}" ]; then
-        REL=$SBT_MIRROR_URL; MIRROR=custom
+        case "$SBT_MIRROR_URL" in */) ;; *) SBT_MIRROR_URL="$SBT_MIRROR_URL/" ;; esac
+        MIRROR=custom; REL="${SBT_MIRROR_URL}$VERSION"
         log "使用自定义下载源: $REL"
         return 0
     fi
-    case "${SBT_MIRROR:-}" in
-        gitee)  MIRROR=gitee;  REL=$GITEE_REPO/releases/download;  RAW=$GITEE_RAW;  log "已指定镜像: Gitee";  return 0 ;;
-        github) MIRROR=github; REL=$GITHUB_REPO/releases/download; RAW=$GITHUB_RAW; log "已指定镜像: GitHub"; return 0 ;;
-    esac
-    MIRROR=github; REL=$GITHUB_REPO/releases/download; RAW=$GITHUB_RAW
+    MIRROR=github; REL="$GITHUB_REPO/releases/download/$VERSION"; RAW=$GITHUB_RAW
     have curl || { log "未安装 curl，无法测速，使用默认源 GitHub"; return 0; }
-    ASSET=sbt_linux_${ARCH}.tar.gz
     BEST=0
     log "正在测速，自动选择下载最快的镜像…"
-# 三个下载源，逐一测速取最快。不可达的（HTTP 非 200/206）自动跳过。
+    # 三个下载源，逐一测速取最快。不可达的（HTTP 非 200/206）自动跳过。
     #   gitee    Gitee Release（该仓库因平台规则不能公开，匿名一般 403，会自动跳过）
     #   jsdelivr jsDelivr CDN 分发仓库内 release-assets/（国内可达，按版本号固定）
     #   github   GitHub Release（官方源，海外快）
     while IFS='|' read -r name rel raw; do
         [ -n "$name" ] || continue
-        out=$(probe "$rel/$VERSION/$ASSET")
+        out=$(probe "$rel/$ASSET")
         code=${out%% *}
         speed=${out#* }
         if [ "$code" = 200 ] || [ "$code" = 206 ]; then
@@ -193,11 +195,11 @@ choose_mirror() {
             warn "  $name   ✗  不可达 (HTTP $code)"
         fi
     done <<EOF
-gitee|$GITEE_REPO/releases/download|$GITEE_RAW
+gitee|$GITEE_REPO/releases/download/$VERSION|$GITEE_RAW
 jsdelivr|https://cdn.jsdelivr.net/gh/zongyu888/starbt@$VERSION/release-assets|$JSDELIVR_RAW
-github|$GITHUB_REPO/releases/download|$GITHUB_RAW
+github|$GITHUB_REPO/releases/download/$VERSION|$GITHUB_RAW
 EOF
-    [ "$BEST" != 0 ] || die "所有镜像都连不上。请检查服务器网络，或用 SBT_MIRROR_URL=https://… 指定下载源"
+    [ "$BEST" != 0 ] || die "所有下载源都连不上。请检查服务器网络，或用 SBT_MIRROR_URL=https://… 指定下载源"
     log "选用下载源: $MIRROR"
 }
 
@@ -373,9 +375,9 @@ if [ -n "$LOCAL_TGZ" ]; then
     cp "$LOCAL_TGZ" "$WORK/$ASSET"
 else
     choose_mirror
-    log "下载 $REL/$VERSION/$ASSET"
-    fetch "$REL/$VERSION/$ASSET" "$WORK/$ASSET" || die "下载失败。可换源重试：SBT_MIRROR=github 或 SBT_MIRROR=gitee"
-    fetch "$REL/$VERSION/$ASSET.sha256" "$WORK/$ASSET.sha256" || die "下载 sha256 校验文件失败"
+    log "下载 $REL/$ASSET"
+    fetch "$REL/$ASSET" "$WORK/$ASSET" || die "下载失败。可换源重试：SBT_MIRROR=jsdelivr 或 SBT_MIRROR=github"
+    fetch "$REL/$ASSET.sha256" "$WORK/$ASSET.sha256" || die "下载 sha256 校验文件失败"
     [ "$(awk '{print $1}' "$WORK/$ASSET.sha256")" = "$(sha256_of "$WORK/$ASSET")" ] \
         || die "安装包 sha256 校验失败（文件损坏或被篡改），已中止安装"
     log "sha256 校验通过"
