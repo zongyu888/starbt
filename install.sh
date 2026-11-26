@@ -5,11 +5,14 @@
 #  一条命令安装，装完自动常驻后台（关闭终端不影响，开机自启）。
 #  脚本会自动测速，从下载最快的镜像获取安装包。
 #
-#    国内/海外通用：
-#      curl -fsSL https://gitee.com/zongyu_xyz/starbt/raw/main/install.sh | sh
+#    国内/海外通用（jsDelivr CDN）：
+#      curl -fsSL https://cdn.jsdelivr.net/gh/zongyu888/starbt@main/install.sh | sh
 #    GitHub：
 #      curl -fsSL https://raw.githubusercontent.com/zongyu888/starbt/main/install.sh | sh
 #    非 root 用户在上面命令末尾把 sh 换成 sudo sh
+#
+#  说明：Gitee 仓库的 raw 链接当前处于平台内容审核状态（HTTP 451），
+#        暂不能用作安装入口；Gitee 的 Release 附件可正常下载，仍作为国内下载镜像。
 #
 #  可选环境变量：
 #    SBT_VERSION=v0.2.3        指定版本（默认自动读取最新）
@@ -42,6 +45,7 @@ GITEE_REPO=https://gitee.com/zongyu_xyz/starbt
 GITHUB_REPO=https://github.com/zongyu888/starbt
 GITEE_RAW=$GITEE_REPO/raw/main
 GITHUB_RAW=https://raw.githubusercontent.com/zongyu888/starbt/main
+JSDELIVR_RAW=https://cdn.jsdelivr.net/gh/zongyu888/starbt@main
 
 VERSION=${SBT_VERSION:-}
 PORT=${SBT_PORT:-8389}
@@ -96,16 +100,17 @@ ensure_tools() {
     need=
     have curl || have wget || need="$need curl/wget"
     have tar || need="$need tar"
+    have gzip || need="$need gzip"
     if [ -z "$need" ]; then return 0; fi
     detect_pm
     log "缺少依赖:$need，正在用包管理器安装 ($PM)…"
     case "$PM" in
-        apt)    DEBIAN_FRONTEND=noninteractive apt-get update -y </dev/null && DEBIAN_FRONTEND=noninteractive apt-get install -y curl ca-certificates tar </dev/null ;;
-        dnf)    dnf install -y curl tar </dev/null ;;
-        yum)    yum install -y curl tar </dev/null ;;
-        apk)    apk add --no-cache curl tar </dev/null ;;
-        pacman) pacman -Sy --noconfirm --needed curl tar </dev/null ;;
-        zypper) zypper --non-interactive install curl tar </dev/null ;;
+        apt)    DEBIAN_FRONTEND=noninteractive apt-get update -y </dev/null && DEBIAN_FRONTEND=noninteractive apt-get install -y curl ca-certificates tar gzip </dev/null ;;
+        dnf)    dnf install -y curl tar gzip </dev/null ;;
+        yum)    yum install -y curl tar gzip </dev/null ;;
+        apk)    apk add --no-cache curl tar gzip </dev/null ;;
+        pacman) pacman -Sy --noconfirm --needed curl tar gzip </dev/null ;;
+        zypper) zypper --non-interactive install curl tar gzip </dev/null ;;
         *)      die "缺少:$need，且识别不到包管理器，请手动安装后重试" ;;
     esac
 }
@@ -140,7 +145,8 @@ resolve_version() {
     [ -n "$VERSION" ] && return 0
     VERSION=$DEFAULT_VERSION
     have curl || return 0
-    for raw in "$GITEE_RAW" "$GITHUB_RAW"; do
+    # 顺序：GitHub → jsDelivr → Gitee（Gitee raw 当前处于审核状态，放最后）
+    for raw in "$GITHUB_RAW" "$JSDELIVR_RAW" "$GITEE_RAW"; do
         if v=$(curl -fsSL --connect-timeout 4 --max-time 6 "$raw/VERSION" </dev/null 2>/dev/null | tr -d '[:space:]'); then
             case "$v" in
                 v[0-9]*) VERSION=$v; return 0 ;;

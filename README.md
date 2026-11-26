@@ -12,10 +12,10 @@ Shadowsocks 客户端里填上服务器地址、端口、密码，本机上网�
 需要 root。两条命令任选其一，脚本会**自动测速并从下载最快的镜像**获取安装包：
 
 ```sh
-# Gitee（国内快）
-curl -fsSL https://gitee.com/zongyu_xyz/starbt/raw/main/install.sh | sh
+# jsDelivr CDN（国内直连快，推荐）
+curl -fsSL https://cdn.jsdelivr.net/gh/zongyu888/starbt@main/install.sh | sh
 
-# GitHub（海外快）
+# GitHub
 curl -fsSL https://raw.githubusercontent.com/zongyu888/starbt/main/install.sh | sh
 ```
 
@@ -74,14 +74,14 @@ SSH 登录服务器后直接敲 `sbt` 回车，进入管理菜单：
 ## 卸载
 
 ```sh
-curl -fsSL https://gitee.com/zongyu_xyz/starbt/raw/main/install.sh | sh -s -- --uninstall
+curl -fsSL https://cdn.jsdelivr.net/gh/zongyu888/starbt@main/install.sh | sh -s -- --uninstall
 ```
 
 程序、常驻项、配置和密码一并删除。
 
 ## 适配范围
 
-安装脚本是纯 POSIX `sh`（dash / bash / busybox ash 都能跑），按下面的顺序自动选择常驻方式：
+安装脚本是纯 POSIX `sh`（dash / bash / busybox ash 都能跑），缺 `curl` / `tar` / `gzip` 时会调用对应包管理器自动安装，并按下面的顺序自动选择常驻方式：
 
 | 优先级 | 条件 | 常驻方式 |
 |---|---|---|
@@ -103,15 +103,15 @@ Alpine 3.20 · Arch Linux · openSUSE Leap 15
 |---|---|
 | `SBT_VERSION=v0.2.3` | 安装指定版本（默认自动读取最新） |
 | `SBT_PORT=8389` | 首次安装时的监听端口 |
-| `SBT_MIRROR=gitee` 或 `github` | 指定镜像，跳过测速 |
+| `SBT_MIRROR=gitee` 或 `github` | 指定镜像，跳过测速（二进制安装包的下载源：Gitee Release / GitHub Release） |
 | `SBT_MIRROR_URL=https://…` | 自定义下载源 |
 
 ## 安装脚本做了什么
 
 全程无交互，失败即中止，重复执行等于升级（保留配置和密码）：
 
-1. 识别 CPU 架构与系统；缺 `curl`/`tar` 时自动调用对应包管理器安装
-2. 从仓库读取最新版本号；对 Gitee / GitHub 两个镜像做下载测速，选最快的
+1. 识别 CPU 架构与系统；缺 `curl`/`tar`/`gzip` 时自动调用对应包管理器安装
+2. 从仓库读取最新版本号；对 Gitee / GitHub 两个 Release 镜像做下载测速，选最快的
 3. 下载 → **sha256 校验** → 解压到 `/usr/local/bin/sbt`
 4. 生成 `/etc/sbt/config.toml`（权限 600，随机密码）
 5. 按上表注册常驻；`ufw` / `firewalld` 处于启用状态时自动放行端口
@@ -130,7 +130,7 @@ Alpine 3.20 · Arch Linux · openSUSE Leap 15
 ## 从源码构建
 
 ```sh
-git clone https://gitee.com/zongyu_xyz/starbt.git
+git clone https://github.com/zongyu888/starbt.git
 cd starbt
 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o sbt ./cmd/sbt
 ```
