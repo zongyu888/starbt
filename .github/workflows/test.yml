@@ -1,0 +1,84 @@
+name: 多发行版安装测试
+
+# 每次推送 / PR 自动跑：先编译出安装包，再在 10 个主流 Linux 发行版的容器里
+# 用真实的 install.sh 安装 → 校验常驻 → 校验卸载。
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: 编译安装包
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+      - name: 编译并打包（与 release.yml 相同的参数）
+        run: |
+          mkdir -p pkg
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o pkg/sbt ./cmd/sbt
+          tar -czf sbt_linux_amd64.tar.gz -C pkg sbt
+          sha256sum sbt_linux_amd64.tar.gz > sbt_linux_amd64.tar.gz.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tarball
+          retention-days: 1
+          path: |
+            sbt_linux_amd64.tar.gz
+            sbt_linux_amd64.tar.gz.sha256
+
+  install:
+    name: ${{ matrix.name }}
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Debian 12
+            image: debian:12
+            setup: apt-get update -qq && apt-get install -y -qq curl ca-certificates >/dev/null && rm -rf /var/lib/apt/lists/*
+          - name: Ubuntu 22.04
+            image: ubuntu:22.04
+            setup: apt-get update -qq && apt-get install -y -qq curl ca-certificates >/dev/null && rm -rf /var/lib/apt/lists/*
+          - name: Ubuntu 24.04
+            image: ubuntu:24.04
+            setup: apt-get update -qq && apt-get install -y -qq curl ca-certificates >/dev/null && rm -rf /var/lib/apt/lists/*
+          - name: Rocky Linux 9
+            image: rockylinux:9
+            setup: dnf install -y -q curl >/dev/null
+          - name: AlmaLinux 9
+            image: almalinux:9
+            setup: dnf install -y -q curl >/dev/null
+          - name: CentOS 7
+            image: centos:7
+            setup: "true"
+          - name: Fedora
+            image: fedora:latest
+            setup: dnf install -y -q curl >/dev/null
+          - name: Alpine 3.20
+            image: alpine:3.20
+            setup: apk add --no-cache curl >/dev/null
+          - name: Arch Linux
+            image: archlinux:base
+            setup: pacman -Sy --noconfirm --needed curl >/dev/null
+          - name: openSUSE Leap 15
+            image: opensuse/leap:15
+            setup: zypper --non-interactive install curl >/dev/null
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: tarball
+          path: .
+      - name: 在 ${{ matrix.name }} 容器里执行一键安装 / 校验 / 卸载
+        run: |
+          docker run --rm -v "$PWD:/src:ro" -w /src "${{ matrix.image }}" \
+            sh -c '${{ matrix.setup }}; sh tests/assert-installed.sh'

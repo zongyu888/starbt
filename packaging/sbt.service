@@ -1,0 +1,16 @@
+[Unit]
+Description=StarBT Shadowsocks server (sbt)
+Documentation=https://gitee.com/zongyu_xyz/starbt
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/sbt daemon
+Restart=always
+RestartSec=5
+MemoryMax=64M
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

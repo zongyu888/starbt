@@ -1,0 +1,10 @@
+# 编译产物
+/dist/
+/pkg/
+/out/
+*.exe
+*.exe~
+
+# 本地环境
+.env
+*.local
