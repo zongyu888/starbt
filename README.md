@@ -123,9 +123,9 @@ Alpine 3.20 · Arch Linux · openSUSE Leap 15
 
 | 变量 | 作用 |
 |---|---|
-| `SBT_VERSION=v0.2.3` | 安装指定版本（默认自动读取最新） |
+| `SBT_VERSION=v0.2.5` | 安装指定版本（默认自动读取最新） |
 | `SBT_PORT=8389` | 首次安装时的监听端口 |
-| `SBT_MIRROR=gitee` 或 `github` | 指定镜像，跳过测速（二进制安装包的下载源：Gitee Release / GitHub Release） |
+| `SBT_MIRROR=jsdelivr`、`github` 或 `gitee` | 指定下载源并跳过测速（jsDelivr CDN / GitHub Release / Gitee Release） |
 | `SBT_MIRROR_URL=https://…` | 自定义下载源 |
 
 ## 安装脚本做了什么
@@ -133,7 +133,7 @@ Alpine 3.20 · Arch Linux · openSUSE Leap 15
 全程无交互，失败即中止，重复执行等于升级（保留配置和密码）：
 
 1. 识别 CPU 架构与系统；缺 `curl`/`tar`/`gzip` 时自动调用对应包管理器安装
-2. 从仓库读取最新版本号；对 Gitee / GitHub 两个 Release 镜像做下载测速，选最快的
+2. 从仓库读取最新版本号；对三个下载源做下载测速，选最快的一个（jsDelivr CDN、GitHub Release、Gitee Release；不可达的自动跳过）
 3. 下载 → **sha256 校验** → 解压到 `/usr/local/bin/sbt`
 4. 生成 `/etc/sbt/config.toml`（权限 600，随机密码）
 5. 按上表注册常驻；`ufw` / `firewalld` 处于启用状态时自动放行端口

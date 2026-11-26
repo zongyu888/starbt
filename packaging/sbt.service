@@ -1,6 +1,6 @@
 [Unit]
 Description=StarBT Shadowsocks server (sbt)
-Documentation=https://gitee.com/zongyu_xyz/starbt
+Documentation=https://github.com/zongyu888/starbt
 After=network-online.target
 Wants=network-online.target
 

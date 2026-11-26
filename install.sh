@@ -32,7 +32,7 @@ set -eu
 
 NAME=StarBT
 CMD=sbt
-DEFAULT_VERSION=v0.2.4
+DEFAULT_VERSION=v0.2.5
 BIN=/usr/local/bin/$CMD
 CONF_DIR=/etc/sbt
 CONF=$CONF_DIR/config.toml
@@ -46,7 +46,6 @@ GITHUB_REPO=https://github.com/zongyu888/starbt
 GITEE_RAW=$GITEE_REPO/raw/main
 GITHUB_RAW=https://raw.githubusercontent.com/zongyu888/starbt/main
 JSDELIVR_RAW=https://cdn.jsdelivr.net/gh/zongyu888/starbt@main
-
 VERSION=${SBT_VERSION:-}
 PORT=${SBT_PORT:-8389}
 MIRROR=
@@ -170,11 +169,15 @@ choose_mirror() {
         gitee)  MIRROR=gitee;  REL=$GITEE_REPO/releases/download;  RAW=$GITEE_RAW;  log "已指定镜像: Gitee";  return 0 ;;
         github) MIRROR=github; REL=$GITHUB_REPO/releases/download; RAW=$GITHUB_RAW; log "已指定镜像: GitHub"; return 0 ;;
     esac
-    MIRROR=gitee; REL=$GITEE_REPO/releases/download; RAW=$GITEE_RAW
-    have curl || { log "未安装 curl，无法测速，使用默认源 Gitee"; return 0; }
+    MIRROR=github; REL=$GITHUB_REPO/releases/download; RAW=$GITHUB_RAW
+    have curl || { log "未安装 curl，无法测速，使用默认源 GitHub"; return 0; }
     ASSET=sbt_linux_${ARCH}.tar.gz
     BEST=0
     log "正在测速，自动选择下载最快的镜像…"
+# 三个下载源，逐一测速取最快。不可达的（HTTP 非 200/206）自动跳过。
+    #   gitee    Gitee Release（该仓库因平台规则不能公开，匿名一般 403，会自动跳过）
+    #   jsdelivr jsDelivr CDN 分发仓库内 release-assets/（国内可达，按版本号固定）
+    #   github   GitHub Release（官方源，海外快）
     while IFS='|' read -r name rel raw; do
         [ -n "$name" ] || continue
         out=$(probe "$rel/$VERSION/$ASSET")
@@ -191,6 +194,7 @@ choose_mirror() {
         fi
     done <<EOF
 gitee|$GITEE_REPO/releases/download|$GITEE_RAW
+jsdelivr|https://cdn.jsdelivr.net/gh/zongyu888/starbt@$VERSION/release-assets|$JSDELIVR_RAW
 github|$GITHUB_REPO/releases/download|$GITHUB_RAW
 EOF
     [ "$BEST" != 0 ] || die "所有镜像都连不上。请检查服务器网络，或用 SBT_MIRROR_URL=https://… 指定下载源"
@@ -211,7 +215,7 @@ install_systemd() {
     cat > "$UNIT" <<'EOF'
 [Unit]
 Description=StarBT Shadowsocks server (sbt)
-Documentation=https://gitee.com/zongyu_xyz/starbt
+Documentation=https://github.com/zongyu888/starbt
 After=network-online.target
 Wants=network-online.target
 

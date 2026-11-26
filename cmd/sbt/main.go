@@ -30,7 +30,7 @@ import (
 	"starbt/internal/sysinfo"
 )
 
-const version = "v0.2.4"
+const version = "v0.2.5"
 
 func main() {
 	args := os.Args[1:]
