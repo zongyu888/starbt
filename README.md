@@ -42,11 +42,49 @@ curl -fsSL https://cdn.jsdelivr.net/gh/zongyu888/starbt@latest/install.sh | sh
 
 ## 本地客户端怎么用
 
-打开任意 Shadowsocks 客户端（Windows / macOS / Android / iOS 均可），
+打开任意 Shadowsocks 客户端（Windows / macOS / Android / iOS 均可，下文有各平台的下载地址），
 新建服务器，填入上面四项，开启系统代理即可。加密方式选 `aes-256-gcm`。
 也可以直接复制「一键导入链接」，在客户端里选「从剪贴板导入 URL」。
 
 > 云服务器（阿里云 / 腾讯云 / AWS 等）需要在**安全组**里放行该端口的 TCP 入站，否则外网连不上。
+
+## 客户端下载
+
+按你用的客户端家族，配套使用服务器上生成的不同文件（见管理菜单第 7 / 8 项，或 `sbt export all`）：
+
+**Shadowsocks 系** —— 用 `starbt-share-link.txt` 或手动填四项
+
+| 平台 | 客户端 | 地址 |
+|---|---|---|
+| Windows | Shadowsocks for Windows | https://github.com/shadowsocks/shadowsocks-windows/releases |
+| macOS | ShadowsocksX-NG | https://github.com/shadowsocks/ShadowsocksX-NG/releases |
+| Android | shadowsocks-android | https://github.com/shadowsocks/shadowsocks-android/releases |
+| iOS | Shadowrocket / Stash | App Store 搜索安装（付费，非 GitHub 项目） |
+| Linux | shadowsocks-rust（内核） | https://github.com/shadowsocks/shadowsocks-rust/releases |
+
+**Clash / mihomo 系** —— 用 `starbt-clash.yaml`，在订阅页导入本地文件
+
+| 平台 | 客户端 | 地址 |
+|---|---|---|
+| Windows / macOS / Linux | Clash Verge Rev | https://github.com/clash-verge-rev/clash-verge-rev/releases |
+| Android | FlClash | https://github.com/chen08209/FlClash/releases |
+| macOS | ClashX Meta | https://github.com/MetaCubeX/ClashX.Meta/releases |
+| 内核 | mihomo（原 Clash Meta） | https://github.com/MetaCubeX/mihomo/releases |
+
+**订阅类 / sing-box 系** —— 用 `starbt-subscription.txt`（剪贴板导入）或 `starbt-singbox.json`（合并 outbounds）
+
+| 平台 | 客户端 | 地址 |
+|---|---|---|
+| Windows | v2rayN | https://github.com/2dust/v2rayN/releases |
+| Android | v2rayNG | https://github.com/2dust/v2rayNG/releases |
+| 全平台 | sing-box | https://github.com/SagerNet/sing-box/releases |
+| 全平台 | Hiddify | https://github.com/hiddify/hiddify-app/releases |
+
+说明：
+
+- 旧版「Clash for Windows」已停止更新且仓库被作者删除，不再推荐；本项目的 Clash 配置面向 mihomo（Meta）内核
+- iOS 没有免费方案：Shadowrocket、Stash 都是 App Store 付费应用
+- 加密方式统一选 `aes-256-gcm`；服务端目前只转发 TCP，客户端里如遇 UDP 开关保持默认即可
 
 ## 管理命令
 
