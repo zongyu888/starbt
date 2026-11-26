@@ -12,8 +12,8 @@ Shadowsocks 客户端里填上服务器地址、端口、密码，本机上网�
 需要 root。两条命令任选其一，脚本会**自动测速并从下载最快的镜像**获取安装包：
 
 ```sh
-# jsDelivr CDN（国内直连快，推荐）
-curl -fsSL https://cdn.jsdelivr.net/gh/zongyu888/starbt@main/install.sh | sh
+# jsDelivr CDN（国内直连快，推荐；@latest 自动指向最新发布版）
+curl -fsSL https://cdn.jsdelivr.net/gh/zongyu888/starbt@latest/install.sh | sh
 
 # GitHub
 curl -fsSL https://raw.githubusercontent.com/zongyu888/starbt/main/install.sh | sh
@@ -74,7 +74,7 @@ SSH 登录服务器后直接敲 `sbt` 回车，进入管理菜单：
 ## 卸载
 
 ```sh
-curl -fsSL https://cdn.jsdelivr.net/gh/zongyu888/starbt@main/install.sh | sh -s -- --uninstall
+curl -fsSL https://cdn.jsdelivr.net/gh/zongyu888/starbt@latest/install.sh | sh -s -- --uninstall
 ```
 
 程序、常驻项、配置和密码一并删除。

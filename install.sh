@@ -5,8 +5,8 @@
 #  一条命令安装，装完自动常驻后台（关闭终端不影响，开机自启）。
 #  脚本会自动测速，从下载最快的镜像获取安装包。
 #
-#    国内/海外通用（jsDelivr CDN）：
-#      curl -fsSL https://cdn.jsdelivr.net/gh/zongyu888/starbt@main/install.sh | sh
+#    国内/海外通用（jsDelivr CDN，@latest = 最新发布版）：
+#      curl -fsSL https://cdn.jsdelivr.net/gh/zongyu888/starbt@latest/install.sh | sh
 #    GitHub：
 #      curl -fsSL https://raw.githubusercontent.com/zongyu888/starbt/main/install.sh | sh
 #    非 root 用户在上面命令末尾把 sh 换成 sudo sh
